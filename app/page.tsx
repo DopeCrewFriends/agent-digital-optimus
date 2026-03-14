@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 type ClaimLog = {
   timestamp: string;
@@ -44,7 +45,7 @@ export default function Home() {
       }
     }
     fetchStats();
-    const t = setInterval(fetchStats, 3_000);
+    const t = setInterval(fetchStats, 15_000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -52,7 +53,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[var(--bg-dark)] relative overflow-hidden">
+    <main className="min-h-screen bg-[var(--bg-dark)] relative overflow-hidden pt-14">
       {/* Hero section with banner */}
       <section className="relative">
         <div className="relative w-full aspect-[21/9] min-h-[200px] max-h-[50vh]">
@@ -127,7 +128,7 @@ export default function Home() {
               <div className="pt-4 border-t border-[var(--border)] space-y-3">
                 <div className="rounded-lg bg-[var(--bg-dark)] p-4 font-mono text-xs space-y-2 border border-[var(--border)]">
                   <p className="text-[var(--text-muted)]">
-                    [Live] Updated {lastUpdate || "—"} · polling every 3s
+                    [Live] Updated {lastUpdate || "—"} · polling every 15s
                   </p>
                   <p>
                     <span className="text-[var(--text-muted)]">Claim when pending &gt; </span>
@@ -191,6 +192,30 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Deploy Agents section */}
+      <section className="relative px-6 py-12 border-t border-[var(--border)]">
+        <div className="max-w-5xl mx-auto">
+          <Link
+            href="/deploy"
+            className="block rounded-2xl border border-[var(--border)] bg-[var(--bg-card)]/60 hover:bg-[var(--bg-card-hover)] hover:border-[var(--accent)]/40 transition-all p-8 md:p-10 group"
+          >
+            <p className="font-mono text-xs text-[var(--accent-code)] mb-2">
+              DEPLOY AGENTS
+            </p>
+            <h2 className="text-xl md:text-2xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+              Launch your own pump.fun agent coin
+            </h2>
+            <p className="text-[var(--text-muted)] text-sm mb-4">
+              Deploy automated agent tokens on pump.fun — your AI agent, your bonding curve, your buyback mechanics.
+            </p>
+            <span className="inline-flex items-center gap-2 text-sm text-[var(--accent)] font-medium">
+              Coming soon
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </span>
+          </Link>
         </div>
       </section>
     </main>

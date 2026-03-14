@@ -16,6 +16,7 @@ import {
   feeSharingConfigPda,
 } from "@pump-fun/pump-sdk";
 import bs58 from "bs58";
+import { hasRecentClaim } from "../chain-history";
 
 const PUMPPORTAL = "https://pumpportal.fun/api/trade-local";
 
@@ -167,6 +168,18 @@ async function runClaim() {
       skipped: true,
       pendingLamports,
       message: `Nothing to claim (pending: ${(pendingLamports / 1e9).toFixed(6)} SOL < 1 SOL threshold)`,
+    });
+  }
+
+  // Prevent double claims: if we (or another instance) just claimed, skip
+  const justClaimed = await hasRecentClaim(connection, keypair.publicKey, 120);
+  if (justClaimed) {
+    console.log("[claim-auto] Recent claim detected on-chain, skipping (debounce)");
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      pendingLamports,
+      message: "Recent claim detected, skipping to prevent double claim",
     });
   }
 

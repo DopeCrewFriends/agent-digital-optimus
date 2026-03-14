@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { OnlinePumpSdk, PUMP_SDK, bondingCurvePda, feeSharingConfigPda } from "@pump-fun/pump-sdk";
-import { getClaimLogsFromChain } from "../chain-history";
+import { getClaimLogsFromChain, getFullClaimTotalFromChain } from "../chain-history";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const CLAIM_THRESHOLD_SOL = 1;
-const TRIGGER_COOLDOWN_MS = 60_000; // debounce: don't re-trigger for 60s (claim takes ~30s)
+const TRIGGER_COOLDOWN_MS = 120_000; // debounce: don't re-trigger for 2 min (claim takes ~30s)
 let lastTriggerAt = 0;
 
 async function getPendingFeesSol(
@@ -76,10 +77,19 @@ export async function GET() {
       }).catch(() => {});
     }
 
-    const totalCollectedLamports = logs.reduce((s, l) => {
-      const amt = l.paymentAmountLamports ?? l.claimAmountLamports ?? 0;
-      return s + (amt > 0 ? amt : 0);
-    }, 0);
+    // Full history total (cached 10 min) — paginates through all creator txns
+    const getCachedTotal = unstable_cache(
+      async (creator: string, rpcUrl: string) => {
+        const conn = new Connection(rpcUrl);
+        return getFullClaimTotalFromChain(conn, new PublicKey(creator));
+      },
+      ["claim-creator-total", creatorPubkey ?? "", rpc ?? ""],
+      { revalidate: 1800 }
+    );
+    const { totalLamports: totalCollectedLamports } =
+      creatorPubkey && rpc
+        ? await getCachedTotal(creatorPubkey, rpc)
+        : { totalLamports: 0 };
 
     return NextResponse.json(
       {
