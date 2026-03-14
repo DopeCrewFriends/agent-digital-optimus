@@ -1,0 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-dark: #050508;
+  --bg-card: #0a0c12;
+  --bg-card-hover: #0f121a;
+  --accent: #00b4ff;
+  --accent-bright: #40c8ff;
+  --accent-code: #00ff88;
+  --accent-warm: #ff9f43;
+  --accent-glitch: #ff00ff;
+  --text: #e8ecf4;
+  --text-muted: #6b7a96;
+  --border: #1a2030;
+  --glow: rgba(0, 180, 255, 0.25);
+  --glow-code: rgba(0, 255, 136, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  color: var(--text);
+  background: var(--bg-dark);
+  min-height: 100vh;
+}
+
+.font-mono {
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Subtle scanline / digital texture */
+.bg-digital::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 180, 255, 0.02) 2px,
+    rgba(0, 180, 255, 0.02) 4px
+  );
+  pointer-events: none;
+}
+
+/* Glow pulse for accent elements */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px var(--glow);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--glow);
+  }
+}
+
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
