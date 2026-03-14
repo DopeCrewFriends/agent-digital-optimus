@@ -81,22 +81,12 @@ export async function GET() {
       return s + (amt > 0 ? amt : 0);
     }, 0);
 
-    const now = new Date();
-    const nextRun = new Date(now);
-    nextRun.setSeconds(0, 0);
-    nextRun.setMilliseconds(0);
-    const mins = nextRun.getMinutes();
-    nextRun.setMinutes(mins + (5 - (mins % 5)));
-    const nextClaimInMs = Math.max(0, nextRun.getTime() - now.getTime());
-
     return NextResponse.json(
       {
         claims: logs,
         totalCollectedLamports,
         totalCollectedSol: totalCollectedLamports / 1e9,
         pendingFeesSol,
-        nextClaimInMs,
-        nextClaimAt: nextRun.toISOString(),
       },
       { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
     );
@@ -107,8 +97,6 @@ export async function GET() {
         totalCollectedLamports: 0,
         totalCollectedSol: 0,
         pendingFeesSol: 0,
-        nextClaimInMs: 0,
-        nextClaimAt: null,
       },
       { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
     );

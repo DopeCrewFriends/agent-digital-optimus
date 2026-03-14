@@ -13,20 +13,12 @@ type ClaimLog = {
   error?: string;
 };
 
-function formatCountdown(ms: number) {
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
 export default function Home() {
   const [creatorStats, setCreatorStats] = useState<{
     totalCollectedSol: number;
     claims: ClaimLog[];
-    nextClaimInMs: number;
     pendingFeesSol: number;
   } | null>(null);
-  const [countdownMs, setCountdownMs] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>("");
 
   useEffect(() => {
@@ -40,18 +32,15 @@ export default function Home() {
         if (cancelled) return;
         if (statsRes.ok) {
           const data = await statsRes.json();
-          const nextMs = data.nextClaimInMs ?? 300000;
           setCreatorStats({
             totalCollectedSol: data.totalCollectedSol ?? 0,
             claims: data.claims ?? [],
-            nextClaimInMs: nextMs,
             pendingFeesSol: data.pendingFeesSol ?? 0,
           });
-          setCountdownMs((prev) => (prev == null || prev <= 0 ? nextMs : prev));
           setLastUpdate(new Date().toLocaleTimeString());
         }
       } catch {
-        if (!cancelled) setCreatorStats({ totalCollectedSol: 0, claims: [], nextClaimInMs: 300000, pendingFeesSol: 0 });
+        if (!cancelled) setCreatorStats({ totalCollectedSol: 0, claims: [], pendingFeesSol: 0 });
       }
     }
     fetchStats();
@@ -61,22 +50,6 @@ export default function Home() {
       clearInterval(t);
     };
   }, []);
-
-  useEffect(() => {
-    if (countdownMs == null) return;
-    const id = setInterval(() => {
-      setCountdownMs((m) => {
-        const next = Math.max(0, (m ?? 0) - 1000);
-        if (next === 0) {
-          fetch("/api/claim-creator-fee/stats", { cache: "no-store" })
-            .then((r) => r.json())
-            .then((d) => setCountdownMs(d.nextClaimInMs ?? 300000));
-        }
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [countdownMs]);
 
   return (
     <main className="min-h-screen bg-[var(--bg-dark)] relative overflow-hidden">
@@ -157,10 +130,8 @@ export default function Home() {
                     [Live] Updated {lastUpdate || "—"} · polling every 3s
                   </p>
                   <p>
-                    <span className="text-[var(--text-muted)]">Next claim: </span>
-                    <span className="text-[var(--accent-code)] tabular-nums font-semibold">
-                      {countdownMs != null ? formatCountdown(countdownMs) : "—"}
-                    </span>
+                    <span className="text-[var(--text-muted)]">Claim when pending &gt; </span>
+                    <span className="text-[var(--accent-code)] font-semibold">1 SOL</span>
                   </p>
                   <p>
                     <span className="text-[var(--text-muted)]">Pending to claim: </span>
