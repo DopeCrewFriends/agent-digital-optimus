@@ -13,40 +13,70 @@ type ClaimLog = {
   error?: string;
 };
 
+function formatCountdown(ms: number) {
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function Home() {
   const [creatorStats, setCreatorStats] = useState<{
     totalCollectedSol: number;
     claims: ClaimLog[];
+    nextClaimInMs: number;
+    pendingFeesSol: number;
   } | null>(null);
+  const [countdownMs, setCountdownMs] = useState<number | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
     async function fetchStats() {
       try {
-        const res = await fetch("/api/claim-creator-fee/stats", {
+        const statsRes = await fetch("/api/claim-creator-fee/stats", {
           cache: "no-store",
           headers: { "Cache-Control": "no-cache" },
         });
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled) {
+        if (cancelled) return;
+        if (statsRes.ok) {
+          const data = await statsRes.json();
+          const nextMs = data.nextClaimInMs ?? 300000;
           setCreatorStats({
             totalCollectedSol: data.totalCollectedSol ?? 0,
             claims: data.claims ?? [],
+            nextClaimInMs: nextMs,
+            pendingFeesSol: data.pendingFeesSol ?? 0,
           });
+          setCountdownMs((prev) => (prev == null || prev <= 0 ? nextMs : prev));
+          setLastUpdate(new Date().toLocaleTimeString());
         }
       } catch {
-        if (!cancelled)
-          setCreatorStats({ totalCollectedSol: 0, claims: [] });
+        if (!cancelled) setCreatorStats({ totalCollectedSol: 0, claims: [], nextClaimInMs: 300000, pendingFeesSol: 0 });
       }
     }
     fetchStats();
-    const t = setInterval(fetchStats, 30_000);
+    const t = setInterval(fetchStats, 3_000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
   }, []);
+
+  useEffect(() => {
+    if (countdownMs == null) return;
+    const id = setInterval(() => {
+      setCountdownMs((m) => {
+        const next = Math.max(0, (m ?? 0) - 1000);
+        if (next === 0) {
+          fetch("/api/claim-creator-fee/stats", { cache: "no-store" })
+            .then((r) => r.json())
+            .then((d) => setCountdownMs(d.nextClaimInMs ?? 300000));
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [countdownMs]);
 
   return (
     <main className="min-h-screen bg-[var(--bg-dark)] relative overflow-hidden">
@@ -121,8 +151,29 @@ export default function Home() {
               <p className="text-sm text-[var(--text-muted)]">
                 Buyback rate: 85%
               </p>
+              <div className="pt-4 border-t border-[var(--border)] space-y-3">
+                <div className="rounded-lg bg-[var(--bg-dark)] p-4 font-mono text-xs space-y-2 border border-[var(--border)]">
+                  <p className="text-[var(--text-muted)]">
+                    [Live] Updated {lastUpdate || "—"} · polling every 3s
+                  </p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Next claim: </span>
+                    <span className="text-[var(--accent-code)] tabular-nums font-semibold">
+                      {countdownMs != null ? formatCountdown(countdownMs) : "—"}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Pending to claim: </span>
+                    <span className="text-[var(--accent)] font-semibold">
+                      {creatorStats?.pendingFeesSol != null
+                        ? `${creatorStats.pendingFeesSol.toFixed(6)} SOL`
+                        : "—"}
+                    </span>
+                  </p>
+                </div>
+              </div>
               <div className="pt-4 border-t border-[var(--border)]">
-                <p className="text-xs text-[var(--text-muted)] mb-2">Recent claims</p>
+                <p className="text-xs text-[var(--text-muted)] mb-2">Recent claims (on-chain)</p>
                 {creatorStats && creatorStats.claims.length > 0 ? (
                   <ul className="space-y-2 max-h-32 overflow-y-auto">
                     {creatorStats.claims.slice(0, 8).map((c, i) => {

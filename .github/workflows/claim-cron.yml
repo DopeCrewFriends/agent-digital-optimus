@@ -1,0 +1,19 @@
+name: Claim Creator Fee
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger claim
+        run: |
+          res=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.CLAIM_ENDPOINT_URL }}/api/claim-creator-fee/auto" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          code=$(echo "$res" | tail -n1)
+          body=$(echo "$res" | sed '$d')
+          echo "$body"
+          [ "$code" = "200" ] || exit 1
