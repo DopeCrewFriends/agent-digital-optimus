@@ -43,8 +43,33 @@ async function buildClaimTx(
 }
 
 const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
-const MIN_CLAIM_LAMPORTS = 100_000; // 0.0001 SOL - skip payment if less
+const PENDING_THRESHOLD_LAMPORTS = 1_000_000_000; // 1 SOL - only claim when pending >= 1 SOL
+const MIN_PAYMENT_LAMPORTS = 100_000; // 0.0001 SOL - skip payment to agent if claimed less than this
 const FEE_BUFFER_LAMPORTS = 50_000; // leave for tx fees
+
+async function getPendingFeesLamports(
+  conn: Connection,
+  creatorPubkey: PublicKey,
+  agentMint: string
+): Promise<number> {
+  try {
+    const sdk = new OnlinePumpSdk(conn);
+    const mint = new PublicKey(agentMint);
+    const bcPda = bondingCurvePda(mint);
+    const bcInfo = await conn.getAccountInfo(bcPda);
+    if (bcInfo) {
+      const bc = PUMP_SDK.decodeBondingCurveNullable(bcInfo);
+      if (bc && bc.creator.equals(feeSharingConfigPda(mint))) {
+        const res = await sdk.getMinimumDistributableFee(mint);
+        return res.distributableFees.toNumber();
+      }
+    }
+    const total = await sdk.getCreatorVaultBalanceBothPrograms(creatorPubkey);
+    return total.toNumber();
+  } catch {
+    return 0;
+  }
+}
 
 async function waitForConfirmation(
   connection: Connection,
@@ -127,6 +152,23 @@ async function runClaim() {
 
   const connection = new Connection(rpcUrl);
   console.log("[claim-auto] Creator:", keypair.publicKey.toBase58());
+
+  const pendingLamports = await getPendingFeesLamports(
+    connection,
+    keypair.publicKey,
+    agentMint
+  );
+  console.log("[claim-auto] Pending (on-chain):", pendingLamports, "lamports");
+
+  if (pendingLamports < PENDING_THRESHOLD_LAMPORTS) {
+    console.log("[claim-auto] Below 1 SOL threshold, skipping");
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      pendingLamports,
+      message: `Nothing to claim (pending: ${(pendingLamports / 1e9).toFixed(6)} SOL < 1 SOL threshold)`,
+    });
+  }
 
   try {
     const balanceBefore = await connection.getBalance(keypair.publicKey);
@@ -222,8 +264,8 @@ async function runClaim() {
     const claimedSol = claimedLamports / 1e9;
     console.log("[claim-auto] Claimed:", claimedLamports, "lamports (~", claimedSol.toFixed(6), "SOL)");
 
-    // Skip payment if below threshold
-    if (claimedLamports < MIN_CLAIM_LAMPORTS) {
+    // Skip payment if claimed amount is dust
+    if (claimedLamports < MIN_PAYMENT_LAMPORTS) {
       console.log("[claim-auto] Claimed", claimedSol.toFixed(6), "SOL (below threshold, skip payment)");
       return NextResponse.json({
         success: true,
@@ -237,7 +279,7 @@ async function runClaim() {
 
     // 85% buyback: pay 85% of claimed amount into agent
     const payAmountLamports = Math.max(
-      MIN_CLAIM_LAMPORTS,
+      MIN_PAYMENT_LAMPORTS,
       Math.floor((claimedLamports - FEE_BUFFER_LAMPORTS) * 0.85)
     );
 

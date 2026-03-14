@@ -6,6 +6,10 @@ import { getClaimLogsFromChain } from "../chain-history";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const CLAIM_THRESHOLD_SOL = 1;
+const TRIGGER_COOLDOWN_MS = 60_000; // debounce: don't re-trigger for 60s (claim takes ~30s)
+let lastTriggerAt = 0;
+
 async function getPendingFeesSol(
   connection: Connection,
   creatorPubkey: PublicKey,
@@ -23,9 +27,8 @@ async function getPendingFeesSol(
         return res.distributableFees.toNumber() / 1e9;
       }
     }
-    const bcBalance = await sdk.getCreatorVaultBalance(creatorPubkey);
-    const ammBalance = await sdk.pumpAmmSdk.getCoinCreatorVaultBalance(creatorPubkey);
-    return (bcBalance.toNumber() + ammBalance.toNumber()) / 1e9;
+    const total = await sdk.getCreatorVaultBalanceBothPrograms(creatorPubkey);
+    return total.toNumber() / 1e9;
   } catch {
     return 0;
   }
@@ -55,6 +58,24 @@ export async function GET() {
         );
       }
     }
+
+    // On Vercel without cron: trigger claim when pending rewards exceed 1 SOL (driven by page/stats traffic)
+    const cronSecret = process.env.CRON_SECRET;
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.BASE_URL || "http://localhost:3001";
+    if (
+      cronSecret &&
+      pendingFeesSol >= CLAIM_THRESHOLD_SOL &&
+      Date.now() - lastTriggerAt > TRIGGER_COOLDOWN_MS
+    ) {
+      lastTriggerAt = Date.now();
+      fetch(`${baseUrl}/api/claim-creator-fee/auto`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cronSecret}` },
+      }).catch(() => {});
+    }
+
     const totalCollectedLamports = logs.reduce((s, l) => {
       const amt = l.paymentAmountLamports ?? l.claimAmountLamports ?? 0;
       return s + (amt > 0 ? amt : 0);
